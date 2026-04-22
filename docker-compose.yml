@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: smart_campus
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+
+  ml-service:
+    build: ./ml-service
+    restart: always
+    environment:
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8000:8000"
+
+  app:
+    build: .
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/smart_campus
+      - REDIS_URL=redis://redis:6379
+      - ML_SERVICE_URL=http://ml-service:8000
+      - JWT_SECRET=${JWT_SECRET:-supersecret}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - redis
+      - ml-service
+
+volumes:
+  postgres_data:

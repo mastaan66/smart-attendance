@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Tenant {
+  id             String   @id @default(uuid())
+  universityName String
+  domain         String   @unique
+  createdAt      DateTime @default(now())
+  location       String?  @default("")
+  classes        Class[]
+  users          User[]
+}
+
+model User {
+  id                  String          @id @default(uuid())
+  name                String
+  email               String          @unique
+  password            String          @default("")
+  passwordHash        String?         @default("")
+  faceDescriptor      String?
+  role                String
+  tenantId            String
+  googleId            String?         @unique
+  isBiometricVerified Boolean         @default(false)
+  createdAt           DateTime        @default(now())
+  attendances         Attendance[]
+  taughtClasses       Class[]         @relation("TeacherClasses")
+  devices             Device[]
+  faceEmbeddings      FaceEmbedding[]
+  leaveRequests       LeaveRequest[]
+  tenant              Tenant          @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, role])
+}
+
+model LeaveRequest {
+  id        String   @id @default(uuid())
+  studentId String
+  classId   String?
+  startDate DateTime
+  endDate   DateTime
+  reason    String
+  status    String   @default("PENDING")
+  comment   String?
+  createdAt DateTime @default(now())
+  student   User     @relation(fields: [studentId], references: [id])
+  class     Class?   @relation(fields: [classId], references: [id])
+}
+
+model Class {
+  id             String     @id @default(uuid())
+  code           String     @default("")
+  tenantId       String
+  teacherId      String
+  name           String
+  roomName       String     @default("")
+  geofenceLat    Float
+  geofenceLng    Float
+  geofenceRadius Float
+  teacher        User       @relation("TeacherClasses", fields: [teacherId], references: [id])
+  tenant         Tenant     @relation(fields: [tenantId], references: [id])
+  schedules      Schedule[]
+  sessions       Session[]
+  leaveRequests  LeaveRequest[]
+}
+
+model Schedule {
+  id        String @id @default(uuid())
+  classId   String
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  class     Class  @relation(fields: [classId], references: [id])
+}
+
+model Session {
+  id          String       @id @default(uuid())
+  classId     String
+  startTime   DateTime     @default(now())
+  endTime     DateTime?
+  qrSeed      String
+  attendances Attendance[]
+  class       Class        @relation(fields: [classId], references: [id])
+}
+
+model Attendance {
+  id              String   @id @default(uuid())
+  sessionId       String
+  studentId       String
+  durationSeconds Int      @default(0)
+  status          String
+  faceScore       Float?
+  geoStatus       Boolean
+  timestamp       DateTime @default(now())
+  student         User     @relation(fields: [studentId], references: [id])
+  session         Session  @relation(fields: [sessionId], references: [id])
+
+  @@index([studentId, timestamp])
+  @@index([sessionId])
+}
+
+model FaceEmbedding {
+  id             String   @id @default(uuid())
+  userId         String
+  embedding      String?
+  faceDescriptor String?
+  vector         String?
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Device {
+  id        String   @id @default(uuid())
+  userId    String
+  deviceId  String   @unique
+  lastLogin DateTime @default(now())
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

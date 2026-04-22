@@ -1,0 +1,21 @@
+{
+  "name": "Smart Campus Attendance",
+  "short_name": "SmartCampus",
+  "description": "Enterprise Geo-Fencing & Facial Recognition Attendance",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0b5cff",
+  "icons": [
+    {
+      "src": "/next.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/next.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

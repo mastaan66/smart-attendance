@@ -1,0 +1,59 @@
+
+> smart-campus@0.1.0 build
+> next build
+
+▲ Next.js 16.2.4 (Turbopack)
+- Environments: .env
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 7.3s
+  Running TypeScript ...
+  Finished TypeScript in 6.9s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/28) ...
+  Generating static pages using 7 workers (7/28) 
+  Generating static pages using 7 workers (14/28) 
+  Generating static pages using 7 workers (21/28) 
+✓ Generating static pages using 7 workers (28/28) in 438ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /analytics
+├ ƒ /api/admin/stats
+├ ƒ /api/attendance/checkin
+├ ƒ /api/attendance/ping
+├ ƒ /api/attendance/verify-face
+├ ƒ /api/auth/[...nextauth]
+├ ƒ /api/auth/register-university
+├ ƒ /api/auth/signin
+├ ƒ /api/auth/signup
+├ ƒ /api/colleges/search
+├ ƒ /api/cron/end-session
+├ ƒ /api/session/[id]/qr
+├ ƒ /api/session/[id]/roster
+├ ƒ /api/session/start
+├ ƒ /api/student/leave
+├ ƒ /api/student/stats
+├ ƒ /api/teacher/classes
+├ ƒ /api/teacher/leave
+├ ƒ /api/teacher/leave/[id]
+├ ○ /auth/register-university
+├ ○ /auth/signin
+├ ○ /auth/signup
+├ ○ /classes
+├ ○ /leave-requests
+├ ƒ /session/[id]/checkin
+├ ○ /settings
+├ ○ /student
+├ ○ /student/leave
+└ ○ /teacher
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
