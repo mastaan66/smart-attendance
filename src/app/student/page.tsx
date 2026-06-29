@@ -5,13 +5,35 @@ import { useSession } from "next-auth/react";
 import { useState, useEffect } from "react";
 import { LayoutDashboard, Flame, AlertCircle, FileText, QrCode } from "lucide-react";
 
+interface StudentClass {
+  id: string;
+  code: string;
+  name: string;
+  roomName: string;
+  teacher: { name: string; email: string };
+  activeSession: { id: string; startTime: string } | null;
+}
+
+interface StudentStats {
+  overallAttendance: number;
+  streak: number;
+  absences: number;
+  modules: Array<{
+    id: string;
+    name: string;
+    percentage: number;
+    status: string;
+  }>;
+}
+
 export default function StudentDashboard() {
   const router = useRouter();
   const { status, data: session } = useSession();
-  const userRole = (session?.user as any)?.role;
-  const [stats, setStats] = useState<any>(null);
-  const [classes, setClasses] = useState<any[]>([]);
+  const userRole = session?.user.role;
+  const [stats, setStats] = useState<StudentStats | null>(null);
+  const [classes, setClasses] = useState<StudentClass[]>([]);
   const [classCode, setClassCode] = useState("");
+  const [attendanceCode, setAttendanceCode] = useState("");
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinMessage, setJoinMessage] = useState("");
   const [actionError, setActionError] = useState("");
@@ -38,7 +60,7 @@ export default function StudentDashboard() {
           const classData = await classesRes.json();
           setClasses(classData);
         }
-      } catch (err) {
+      } catch {
         console.error("Failed to fetch stats");
       } finally {
         setIsLoading(false);
@@ -47,19 +69,14 @@ export default function StudentDashboard() {
     fetchStats();
   }, [status, userRole, router]);
 
-  const startCheckIn = async (sessionId: string) => {
+  const startCheckIn = (sessionId: string) => {
     setActionError("");
-    try {
-      const tokenRes = await fetch(`/api/session/${sessionId}/qr`);
-      const data = await tokenRes.json();
-      if (!tokenRes.ok) {
-        setActionError(data.error || "Failed to get session token");
-        return;
-      }
-      router.push(`/session/${sessionId}/checkin?token=${encodeURIComponent(data.token)}`);
-    } catch {
-      setActionError("Failed to start check-in");
+    const token = attendanceCode.trim();
+    if (!token) {
+      setActionError("Enter the rotating attendance code displayed by your teacher.");
+      return;
     }
+    router.push(`/session/${sessionId}/checkin?token=${encodeURIComponent(token)}`);
   };
 
   const joinByCode = async (e: React.FormEvent) => {
@@ -81,14 +98,9 @@ export default function StudentDashboard() {
         return;
       }
 
-      setJoinMessage(`Class found: ${data.class.name}`);
+      setJoinMessage(`Joined ${data.class.name}.`);
+      setClasses((current) => [...current.filter((item) => item.id !== data.class.id), data.class]);
       setClassCode("");
-
-      if (data.class.activeSession?.id) {
-        startCheckIn(data.class.activeSession.id);
-      } else {
-        setActionError("Class found, but there is no active session right now.");
-      }
     } catch {
       setActionError("Failed to join class");
     } finally {
@@ -143,8 +155,17 @@ export default function StudentDashboard() {
                 {joinLoading ? "Joining..." : "Join Class"}
               </button>
             </form>
+            <div className="form-group" style={{ marginBottom: "16px" }}>
+              <label className="form-label">Rotating Attendance Code</label>
+              <input
+                className="form-input"
+                placeholder="Code displayed by your teacher"
+                value={attendanceCode}
+                onChange={(event) => setAttendanceCode(event.target.value.trim())}
+              />
+            </div>
             {classes.length === 0 ? (
-              <p style={{ color: "var(--text-muted)" }}>No classes found for your university.</p>
+              <p style={{ color: "var(--text-muted)" }}>You have not joined any classes yet.</p>
             ) : (
               <div style={{ display: "grid", gap: "10px" }}>
                 {classes.map((c) => (
@@ -166,7 +187,7 @@ export default function StudentDashboard() {
                       </div>
                     </div>
                     {c.activeSession ? (
-                      <button className="btn-primary" style={{ padding: "8px 12px", fontSize: "12px" }} onClick={() => startCheckIn(c.activeSession.id)}>
+                      <button className="btn-primary" style={{ padding: "8px 12px", fontSize: "12px" }} onClick={() => c.activeSession && startCheckIn(c.activeSession.id)}>
                         Check In
                       </button>
                     ) : (
@@ -236,7 +257,7 @@ export default function StudentDashboard() {
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {stats?.modules.map((m: any) => (
+            {stats?.modules.map((m) => (
               <div key={m.id}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <span style={{ fontWeight: 600, fontSize: '15px' }}>{m.name}</span>

@@ -5,6 +5,7 @@ const mockPrisma = {
   session: { findUnique: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
   attendance: { findMany: jest.fn(), create: jest.fn(), update: jest.fn(), upsert: jest.fn() },
   class: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+  enrollment: { findMany: jest.fn(), findUnique: jest.fn(), upsert: jest.fn() },
   schedule: { deleteMany: jest.fn() },
   studentClass: { findMany: jest.fn(), findUnique: jest.fn(), upsert: jest.fn() },
   leaveRequest: { create: jest.fn(), findMany: jest.fn() },
@@ -19,6 +20,7 @@ jest.mock("@/lib/prisma", () => ({
 
 jest.mock("@/lib/redis", () => ({
   __esModule: true,
+    del: jest.fn().mockResolvedValue(1),
   default: {
     get: jest.fn().mockResolvedValue(null),
     set: jest.fn().mockResolvedValue("OK"),
@@ -30,7 +32,9 @@ jest.mock("@/lib/redis", () => ({
 // Global Fetch Mock
 global.fetch = jest.fn();
 
-process.env.DATABASE_URL = "file:./prisma/test.db";
+process.env.DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/smart_campus_test";
+process.env.NEXTAUTH_SECRET = "test-nextauth-secret-with-at-least-32-characters";
+process.env.UNIVERSITY_ONBOARDING_TOKEN = "test-onboarding-token";
 process.env.JWT_SECRET = "test_secret";
 process.env.NEXTAUTH_URL = "http://localhost:3000";
 process.env.GOOGLE_CLIENT_ID = "mock_id";

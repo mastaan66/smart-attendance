@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Tenant {
@@ -32,6 +32,7 @@ model User {
   attendances         Attendance[]
   taughtClasses       Class[]         @relation("TeacherClasses")
   devices             Device[]
+  enrollments         Enrollment[]
   faceEmbeddings      FaceEmbedding[]
   leaveRequests       LeaveRequest[]
   tenant              Tenant          @relation(fields: [tenantId], references: [id])
@@ -54,20 +55,37 @@ model LeaveRequest {
 }
 
 model Class {
-  id             String     @id @default(uuid())
-  code           String     @default("")
+  id             String         @id @default(uuid())
+  code           String         @default("")
   tenantId       String
   teacherId      String
   name           String
-  roomName       String     @default("")
+  roomName       String         @default("")
   geofenceLat    Float
   geofenceLng    Float
   geofenceRadius Float
-  teacher        User       @relation("TeacherClasses", fields: [teacherId], references: [id])
-  tenant         Tenant     @relation(fields: [tenantId], references: [id])
+  teacher        User           @relation("TeacherClasses", fields: [teacherId], references: [id])
+  tenant         Tenant         @relation(fields: [tenantId], references: [id])
   schedules      Schedule[]
   sessions       Session[]
+  enrollments    Enrollment[]
   leaveRequests  LeaveRequest[]
+
+  @@unique([tenantId, code])
+}
+
+model Enrollment {
+  id        String   @id @default(uuid())
+  studentId String
+  classId   String
+  status    String   @default("ACTIVE")
+  joinedAt  DateTime @default(now())
+  student   User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, classId])
+  @@index([classId, status])
+  @@index([studentId, status])
 }
 
 model Schedule {
@@ -101,6 +119,7 @@ model Attendance {
   student         User     @relation(fields: [studentId], references: [id])
   session         Session  @relation(fields: [sessionId], references: [id])
 
+  @@unique([sessionId, studentId])
   @@index([studentId, timestamp])
   @@index([sessionId])
 }

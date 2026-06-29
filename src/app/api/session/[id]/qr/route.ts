@@ -11,13 +11,12 @@ export async function GET(
   try {
     const { id: sessionId } = await params;
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
+    if (!session || !session.user || session.user.role !== "TEACHER") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const userRole = (session.user as any).role;
-    const userId = (session.user as any).id;
-    const tenantId = (session.user as any).tenantId;
+    const userId = session.user.id;
+    const tenantId = session.user.tenantId;
 
     const dbSession = await prisma.session.findUnique({
       where: { id: sessionId },
@@ -40,13 +39,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (userRole === "TEACHER") {
-      if (dbSession.class.teacherId !== userId) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-    } else if (userRole === "STUDENT") {
-      // Students from the same tenant can retrieve the active rotating token.
-    } else {
+    if (dbSession.class.teacherId !== userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -57,7 +50,7 @@ export async function GET(
     const token = generateQRToken(dbSession.qrSeed);
 
     return NextResponse.json({ token, refreshIn: 15000 - (Date.now() % 15000) });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

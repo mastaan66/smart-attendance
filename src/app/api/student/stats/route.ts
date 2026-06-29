@@ -4,140 +4,111 @@ import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import redis from "@/lib/redis";
 
-export async function GET(req: Request) {
+function utcDateKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
+    if (!session?.user || session.user.role !== "STUDENT") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const studentId = (session.user as any).id;
-
-    // --- OPTIMIZATION: Redis Caching (Iteration 1) ---
+    const studentId = session.user.id as string;
+    const tenantId = session.user.tenantId as string;
     const cacheKey = `student_stats:${studentId}`;
     const cachedData = await redis.get(cacheKey);
     if (cachedData) {
       return NextResponse.json(JSON.parse(cachedData));
     }
-    // ------------------------------------------------
 
-    // 1. Fetch all attendance records for this student
-    const attendances = await prisma.attendance.findMany({
-      where: { studentId },
-      select: {
-        timestamp: true,
-        durationSeconds: true,
-        sessionId: true
-      },
-      orderBy: { timestamp: 'desc' }
-    });
-
-    // 2. Calculate Stats
-    const threshold = 0.75;
-    const sessionDurations = await prisma.session.findMany({
+    const enrollments = await prisma.enrollment.findMany({
       where: {
-        id: {
-          in: attendances.map((a) => a.sessionId),
-        },
-      },
-      select: {
-        id: true,
-        startTime: true,
-        endTime: true,
-      },
-    });
-
-    const sessionDurationById = new Map(
-      sessionDurations.map((s) => {
-        const end = s.endTime ?? new Date();
-        const seconds = Math.max(1, Math.floor((end.getTime() - s.startTime.getTime()) / 1000));
-        return [s.id, seconds];
-      })
-    );
-
-    const presentSessions = attendances.filter((a) => {
-      const durationSeconds = sessionDurationById.get(a.sessionId) ?? 3600;
-      return a.durationSeconds / durationSeconds >= threshold;
-    });
-    const attendancePercentage = attendances.length > 0 
-      ? Math.round((presentSessions.length / attendances.length) * 100) 
-      : 0;
-
-    // 3. Streak Calculation (Consecutive days with at least one attendance)
-    let streak = 0;
-    const attendanceDates = [...new Set(attendances.map(a => a.timestamp.toISOString().split('T')[0]))];
-    
-    if (attendanceDates.length > 0) {
-      let currentDate = new Date();
-      for (let i = 0; i < attendanceDates.length; i++) {
-        const dateStr = currentDate.toISOString().split('T')[0];
-        if (attendanceDates.includes(dateStr)) {
-          streak++;
-          currentDate.setDate(currentDate.getDate() - 1);
-        } else {
-          // If we miss today, streak might still be active from yesterday
-          if (i === 0) {
-            currentDate.setDate(currentDate.getDate() - 1);
-            const yesterdayStr = currentDate.toISOString().split('T')[0];
-            if (attendanceDates.includes(yesterdayStr)) {
-              continue; // Keep checking from yesterday
-            }
-          }
-          break;
-        }
-      }
-    }
-
-    // 4. Modules List
-    const modules = await prisma.class.findMany({
-      where: {
-        tenantId: (session.user as any).tenantId
+        studentId,
+        status: "ACTIVE",
+        class: { tenantId },
       },
       include: {
-        sessions: {
+        class: {
           include: {
-            attendances: {
-              where: { studentId },
+            sessions: {
+              where: { endTime: { not: null } },
+              orderBy: { startTime: "asc" },
+              include: {
+                attendances: {
+                  where: { studentId },
+                  select: { status: true, timestamp: true },
+                  take: 1,
+                },
+              },
             },
           },
         },
-      }
+      },
+      orderBy: { class: { name: "asc" } },
     });
 
-    const moduleStats = modules.map((classInfo) => {
-      const moduleAttendances = classInfo.sessions.flatMap((s) =>
-        s.attendances.map((attendance) => ({ ...attendance, session: s }))
+    const modules = enrollments.map((enrollment) => {
+      const eligibleSessions = enrollment.class.sessions.filter(
+        (classSession) => Boolean(classSession.endTime && classSession.endTime >= enrollment.joinedAt),
       );
-      const modulePresent = moduleAttendances.filter((a) => {
-        const end = a.session.endTime ?? new Date();
-        const sessionSeconds = Math.max(1, Math.floor((end.getTime() - a.session.startTime.getTime()) / 1000));
-        return a.durationSeconds / sessionSeconds >= threshold;
-      });
-      const percent = moduleAttendances.length > 0 
-        ? Math.round((modulePresent.length / moduleAttendances.length) * 100) 
+      const presentSessions = eligibleSessions.filter(
+        (classSession) => classSession.attendances[0]?.status === "PRESENT",
+      );
+      const percentage = eligibleSessions.length
+        ? Math.round((presentSessions.length / eligibleSessions.length) * 100)
         : 0;
-      
+
       return {
-        id: classInfo.id,
-        name: classInfo.name,
-        percentage: percent,
-        status: percent >= 85 ? "Excellent" : percent >= 75 ? "Good" : "Warning"
+        id: enrollment.class.id,
+        name: enrollment.class.name,
+        percentage,
+        status: percentage >= 85 ? "Excellent" : percentage >= 75 ? "Good" : "Warning",
+        eligibleSessions,
+        presentSessions,
       };
     });
 
+    const eligibleSessions = modules.flatMap((module) => module.eligibleSessions);
+    const presentSessions = modules.flatMap((module) => module.presentSessions);
+    const overallAttendance = eligibleSessions.length
+      ? Math.round((presentSessions.length / eligibleSessions.length) * 100)
+      : 0;
+
+    const attendanceDates = new Set(
+      presentSessions
+        .map((classSession) => classSession.attendances[0]?.timestamp)
+        .filter((timestamp): timestamp is Date => Boolean(timestamp))
+        .map(utcDateKey),
+    );
+
+    let streak = 0;
+    const cursor = new Date();
+    cursor.setUTCHours(0, 0, 0, 0);
+    if (!attendanceDates.has(utcDateKey(cursor))) {
+      cursor.setUTCDate(cursor.getUTCDate() - 1);
+    }
+    while (attendanceDates.has(utcDateKey(cursor))) {
+      streak += 1;
+      cursor.setUTCDate(cursor.getUTCDate() - 1);
+    }
+
     const result = {
-      overallAttendance: attendancePercentage,
+      overallAttendance,
       streak,
-      absences: attendances.length - presentSessions.length,
-      modules: moduleStats
+      absences: eligibleSessions.length - presentSessions.length,
+      modules: modules.map((module) => ({
+        id: module.id,
+        name: module.name,
+        percentage: module.percentage,
+        status: module.status,
+      })),
     };
 
-    // Cache the result for 60 seconds
     await redis.set(cacheKey, JSON.stringify(result), "EX", 60);
-
     return NextResponse.json(result);
-
-  } catch (error: any) {
+  } catch (error) {
     console.error("STUDENT STATS ERROR:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

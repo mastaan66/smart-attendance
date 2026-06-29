@@ -6,27 +6,36 @@ import prisma from "@/lib/prisma";
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user || (session.user as any).role !== "STUDENT") {
+    if (!session || !session.user || session.user.role !== "STUDENT") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const tenantId = (session.user as any).tenantId;
-    const classes = await prisma.class.findMany({
-      where: { tenantId },
+    const tenantId = session.user.tenantId;
+    const studentId = session.user.id;
+    const enrollments = await prisma.enrollment.findMany({
+      where: {
+        studentId,
+        status: "ACTIVE",
+        class: { tenantId },
+      },
       include: {
-        teacher: { select: { name: true, email: true } },
-        sessions: {
-          where: { endTime: null },
-          orderBy: { startTime: "desc" },
-          take: 1,
-          select: { id: true, startTime: true },
+        class: {
+          include: {
+            teacher: { select: { name: true, email: true } },
+            sessions: {
+              where: { endTime: null },
+              orderBy: { startTime: "desc" },
+              take: 1,
+              select: { id: true, startTime: true },
+            },
+          },
         },
       },
-      orderBy: { name: "asc" },
+      orderBy: { class: { name: "asc" } },
     });
 
     return NextResponse.json(
-      classes.map((classItem) => ({
+      enrollments.map(({ class: classItem }) => ({
         id: classItem.id,
         code: classItem.code,
         name: classItem.name,
@@ -44,7 +53,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user || (session.user as any).role !== "STUDENT") {
+    if (!session || !session.user || session.user.role !== "STUDENT") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -54,7 +63,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Class code is required" }, { status: 400 });
     }
 
-    const tenantId = (session.user as any).tenantId;
+    const tenantId = session.user.tenantId;
+    const studentId = session.user.id;
     const classItem = await prisma.class.findFirst({
       where: {
         tenantId,
@@ -74,6 +84,18 @@ export async function POST(req: Request) {
     if (!classItem) {
       return NextResponse.json({ error: "Invalid class code" }, { status: 404 });
     }
+
+    await prisma.enrollment.upsert({
+      where: {
+        studentId_classId: { studentId, classId: classItem.id },
+      },
+      update: { status: "ACTIVE" },
+      create: {
+        studentId,
+        classId: classItem.id,
+        status: "ACTIVE",
+      },
+    });
 
     return NextResponse.json({
       success: true,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 const CameraCapture = dynamic(() => import("@/components/CameraCapture"), { ssr: false });
@@ -14,50 +14,28 @@ export default function SignupPage() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    password: "",
-    role: "STUDENT"
+    password: ""
   });
   const [images, setImages] = useState<string[]>([]);
-  const [autoSubmitted, setAutoSubmitted] = useState(false);
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedUni, setSelectedUni] = useState<University | null>(null);
-  const submitTimerRef = useRef<number | null>(null);
 
   const handleUniversitySelect = (uni: University) => {
     setSelectedUni(uni);
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const onCapture = (image: string) => {
     setImages((prev) => {
-      if (prev.length >= 3 || autoSubmitted) return prev;
+      if (prev.length >= 3) return prev;
       return [...prev, image];
     });
   };
-
-  useEffect(() => {
-    if (submitTimerRef.current) {
-      window.clearTimeout(submitTimerRef.current);
-    }
-
-    if (images.length === 3 && !autoSubmitted) {
-      setAutoSubmitted(true);
-      submitTimerRef.current = window.setTimeout(() => {
-        handleSubmit();
-      }, 100);
-    }
-
-    return () => {
-      if (submitTimerRef.current) {
-        window.clearTimeout(submitTimerRef.current);
-      }
-    };
-  }, [images, autoSubmitted]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -70,9 +48,7 @@ export default function SignupPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
-          university_domain: selectedUni?.domain,
-          face_image: images[0], // Sending the first captured image for registration
-          device_id: typeof window !== "undefined" ? window.navigator.userAgent : "server_side"
+          face_image: images[0]
         })
       });
 
@@ -83,7 +59,7 @@ export default function SignupPage() {
       } else {
         setError(result.message || "Registration failed");
       }
-    } catch (err) {
+    } catch {
       setError("An error occurred during registration.");
     } finally {
       setIsLoading(false);
@@ -119,15 +95,7 @@ export default function SignupPage() {
             </div>
             <div className="form-group">
               <label className="form-label">Password</label>
-              <input type="password" name="password" className="form-input" required value={formData.password} onChange={handleInputChange} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Role</label>
-              <select name="role" className="form-input" value={formData.role} onChange={handleInputChange}>
-                <option value="STUDENT">Student</option>
-                <option value="TEACHER">Teacher</option>
-                <option value="ADMIN">Administrator</option>
-              </select>
+              <input type="password" name="password" className="form-input" minLength={12} required value={formData.password} onChange={handleInputChange} />
             </div>
             <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '16px' }}>Continue to Face Scan</button>
             <p style={{ textAlign: 'center', marginTop: '20px', fontSize: '14px' }}>
@@ -140,7 +108,7 @@ export default function SignupPage() {
               Please capture 3 images of your face for high-precision registration.
             </p>
             
-            <CameraCapture onCapture={onCapture} buttonText={`Capture Image ${Math.min(images.length + 1, 3)} / 3`} disabled={images.length >= 3 || autoSubmitted} />
+            <CameraCapture onCapture={onCapture} buttonText={`Capture Image ${Math.min(images.length + 1, 3)} / 3`} disabled={images.length >= 3} />
             
             <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'center' }}>
               {[0, 1, 2].map(i => (
@@ -148,7 +116,7 @@ export default function SignupPage() {
                   width: '60px', height: '60px', borderRadius: '8px', border: '2px solid var(--border-color)', 
                   overflow: 'hidden', backgroundColor: '#f0f0f0', position: 'relative'
                 }}>
-                  {images[i] ? <img src={images[i]} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#ccc' }}>?</div>}
+                  {images[i] ? <img src={images[i]} alt={`Face capture ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#ccc' }}>?</div>}
                 </div>
               ))}
             </div>

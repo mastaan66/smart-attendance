@@ -6,7 +6,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       POSTGRES_DB: smart_campus
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -19,29 +19,22 @@ services:
     ports:
       - "6379:6379"
 
-  ml-service:
-    build: ./ml-service
-    restart: always
-    environment:
-      - PYTHONUNBUFFERED=1
-    ports:
-      - "8000:8000"
-
   app:
     build: .
     restart: always
     environment:
-      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/smart_campus
-      - REDIS_URL=redis://redis:6379
-      - ML_SERVICE_URL=http://ml-service:8000
-      - JWT_SECRET=${JWT_SECRET:-supersecret}
-      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/smart_campus
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ML_SERVICE_URL=${ML_SERVICE_URL:?ML_SERVICE_URL is required}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:?NEXTAUTH_URL is required}
+      - UNIVERSITY_ONBOARDING_TOKEN=${UNIVERSITY_ONBOARDING_TOKEN:?UNIVERSITY_ONBOARDING_TOKEN is required}
     ports:
       - "3000:3000"
     depends_on:
       - postgres
       - redis
-      - ml-service
 
 volumes:
   postgres_data:
