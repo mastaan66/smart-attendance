@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { locationPingQueue } from "@/lib/queue";
+import { getLocationPingQueue } from "@/lib/queue";
 import { apiError, apiSuccess } from "@/lib/api-utils";
 
 export async function POST(req: Request) {
@@ -18,9 +18,9 @@ export async function POST(req: Request) {
     }
 
     // Add job to BullMQ queue for background processing
-    await locationPingQueue.add("ping", {
+    await getLocationPingQueue().add("ping", {
       sessionId,
-      studentId: (session.user as any).id,
+      studentId: session.user.id,
       lat,
       lng,
       timestamp: new Date().toISOString(),
